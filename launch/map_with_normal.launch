@@ -1,0 +1,7 @@
+<launch>
+  <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" respawn="false" output="screen" >
+    <param name="binary_filename"    type="string" value= "/home/liu/bag/kadoma/C01_road.pcd" />
+    <param name="map3d_topic_name"   type="string" value= "/map3d" />
+    <param name="with_normal"   type="bool" value= "true" />
+  </node>
+</launch>

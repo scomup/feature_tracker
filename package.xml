@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package>
+  <name>feature_tracker</name>
+  <version>0.2.0</version>
+  <description>The feature_tracker package</description>
+
+  <maintainer email="liu.yang@jp.panasonic.com">liu</maintainer>
+  <license>GPL3.0</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>rostest</build_depend>
+  <build_depend>roslint</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>cv_bridge</build_depend>
+
+  <run_depend>roscpp</run_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <run_depend>cv_bridge</run_depend>
+
+</package>
+

@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "browse": {
+                "databaseFilename": "",
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "includePath": [
+                "/home/liu/catkin_ws/devel/include/**",
+                "/opt/ros/kinetic/include/**",
+                "/home/liu/catkin_ws/src/navigation/base_local_planner/include/**",
+                "/home/liu/catkin_ws/src/navigation/costmap_2d/include/**",
+                "/home/liu/catkin_ws/src/detected_objects_visualizer/include/**",
+                "/home/liu/catkin_ws/src/lidar_euclidean_cluster_detect/include/**",
+                "/home/liu/catkin_ws/src/navigation/move_base/include/**",
+                "/home/liu/catkin_ws/src/navigation/nav_core/include/**",
+                "/home/liu/catkin_ws/src/navigation/navfn/include/**",
+                "/home/liu/catkin_ws/src/ndt_cpu/include/**",
+                "/home/liu/catkin_ws/src/ndt_gpu/include/**",
+                "/home/liu/catkin_ws/src/perfect_velodyne/include/**",
+                "/home/liu/catkin_ws/src/waypoint_follower/include/**",
+                "/usr/include/**"
+            ],
+            "name": "ROS",
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
