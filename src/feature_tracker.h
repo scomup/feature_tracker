@@ -27,14 +27,12 @@ class FeatureTracker
   private:
     void precompute();
     std::vector<Eigen::Matrix<float, 1, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 1, 2>>> dataGradient(const cv::Mat &data) const;
-    cv::Mat shiftFrame(const cv::Mat frame, const int pixels, const int direction) const;
 
-    float residuals(const cv::Mat &data1, const cv::Mat &data2, Eigen::VectorXf &res);
+    float residuals(const cv::Mat &data1, const cv::Mat &data2, Eigen::VectorXf &res) const;
     cv::Mat getLivData(Eigen::Matrix3f& H) const;
     Eigen::Matrix4f exp(const Eigen::Vector3f& x) const;
     Eigen::Matrix<float, 3, 4> M1_;
     Eigen::Matrix<float, 4, 3> M2_;
-    Eigen::Matrix3f Hroi_;
     Eigen::Matrix3f getH() const;
 
 
@@ -43,7 +41,7 @@ class FeatureTracker
     const Eigen::Vector4f rect_;
     const float scale_;
     SuperpointFrontend* kp_frontend_;
-    Eigen::Matrix4f T0_;
+    Eigen::Matrix4f Tvlvr_;
     cv::Mat ref_data_;
     cv::Mat liv_data_;
 };

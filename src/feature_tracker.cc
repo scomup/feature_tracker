@@ -34,14 +34,11 @@ namespace feature_tracker
         M1_ = Ks * Rcv * M;
         M2_ = N * Rvc * Ksinv;
 
-        Hroi_ = Eigen::Matrix3f::Identity();
-        Hroi_(0,2) = rect_(0);
-        Hroi_(1,2) = rect_(1);
-        T0_ = Eigen::Matrix4f::Identity();
+        Tvlvr_ = Eigen::Matrix4f::Identity();
         precompute();
     }
-    Eigen::Matrix3f FeatureTracker::getH() const{
-        return  M1_ * T0_ * M2_;
+    inline Eigen::Matrix3f FeatureTracker::getH() const{
+        return  M1_ * Tvlvr_ * M2_;
     }
 
     void FeatureTracker::track(const cv::Mat& img)
@@ -81,7 +78,7 @@ namespace feature_tracker
         //double elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count();
         //std::cout<<"get ref_dxdy :"<<elapsed2<<std::endl;
 
-        Eigen::Matrix4f Tvlvr = T0_;
+        Eigen::Matrix4f Tvlvr = Tvlvr_;
 
         const int width = ref_data_roi.cols;
         const int height = ref_data_roi.rows;
@@ -107,7 +104,7 @@ namespace feature_tracker
 
             if (last_err - err < 0.0000001)
                 break;
-            cnt++;
+    
             last_err = err;
             //std::cout<<"error: "<<err<<std::endl;
 
@@ -135,7 +132,7 @@ namespace feature_tracker
             auto x0 = hessian_inv * temp;
             auto dT = exp(x0);
             Tvlvr = Tvlvr * dT;
-             
+            cnt++; 
             //auto t11 = std::chrono::system_clock::now();
             //double elapsed10 = std::chrono::duration_cast<std::chrono::microseconds>(t11-t10).count();
             //std::cout<<"get H: "<<elapsed10<<std::endl;
@@ -143,7 +140,7 @@ namespace feature_tracker
             //show(img, H);
         }
         liv_data_.copyTo(ref_data_);
-        T0_ = Tvlvr;
+        Tvlvr_ = Tvlvr;
         auto t12 = std::chrono::system_clock::now();
         double elapsed120 = std::chrono::duration_cast<std::chrono::milliseconds>(t12-t0).count();
         std::cout<<"total loop: "<<cnt<<"  time: "<<elapsed120<<std::endl;
@@ -172,15 +169,18 @@ namespace feature_tracker
             Eigen::Vector3f p1(0., rect_[2], 1.);
             Eigen::Vector3f p2(rect_[3], 0., 1.);
             Eigen::Vector3f p3(rect_[3], rect_[2], 1.);
+            Eigen::Matrix3f tmp = Eigen::Matrix3f::Identity();
+            tmp(0,2) = rect_(0);
+            tmp(1,2) = rect_(1);
 
-            const Eigen::Matrix3f tempH = Hroi_ * getH();
-            p0 = tempH * p0;
+            const Eigen::Matrix3f H = tmp * getH();
+            p0 = H * p0;
             p0 /= p0.z();
-            p1 = tempH * p1;
+            p1 = H * p1;
             p1 /= p1.z();
-            p2 = tempH * p2;
+            p2 = H * p2;
             p2 /= p2.z();
-            p3 = tempH * p3;
+            p3 = H * p3;
             p3 /= p3.z();
             cv::Point a(p0.x(), p0.y());
             cv::Point b(p1.x(), p1.y());
@@ -219,11 +219,16 @@ namespace feature_tracker
 
     cv::Mat FeatureTracker::getLivData(Eigen::Matrix3f &H) const
     {
-        
-        Eigen::Matrix3f Heigen = Hroi_ * H;
+        Eigen::Matrix3f tmp = Eigen::Matrix3f::Identity();
+        tmp(0,2) = rect_(0);
+        tmp(1,2) = rect_(1);
+
+        Eigen::Matrix3f Heigen = tmp * H;
         cv::Mat liv_data, Hcv;
         cv::eigen2cv(Heigen, Hcv);
         cv::warpPerspective(liv_data_, liv_data, Hcv, cv::Size(rect_[2], rect_[3]), cv::INTER_LINEAR + cv::WARP_INVERSE_MAP);
+        //cv::warpPerspective(liv_data_, liv_data, Hcv, cv::Size(rect_[2], rect_[3]), cv::INTER_CUBIC + cv::WARP_INVERSE_MAP);
+        
         return liv_data;
     }
 
@@ -280,32 +285,7 @@ namespace feature_tracker
         return gradient;
     }
 
-    cv::Mat FeatureTracker::shiftFrame(const cv::Mat frame, const int pixels, const int direction) const
-    {
-        //create a same sized temporary Mat with all the pixels flagged as invalid (-1)
-        cv::Mat temp = cv::Mat::zeros(frame.size(), frame.type());
-
-        switch (direction)
-        {
-        case (0): //ShiftUp
-            frame(cv::Rect(0, pixels, frame.cols, frame.rows - pixels)).copyTo(temp(cv::Rect(0, 0, temp.cols, temp.rows - pixels)));
-            break;
-        case (1): //ShiftRight
-            frame(cv::Rect(0, 0, frame.cols - pixels, frame.rows)).copyTo(temp(cv::Rect(pixels, 0, frame.cols - pixels, frame.rows)));
-            break;
-        case (2): //ShiftDown
-            frame(cv::Rect(0, 0, frame.cols, frame.rows - pixels)).copyTo(temp(cv::Rect(0, pixels, frame.cols, frame.rows - pixels)));
-            break;
-        case (3): //ShiftLeft
-            frame(cv::Rect(pixels, 0, frame.cols - pixels, frame.rows)).copyTo(temp(cv::Rect(0, 0, frame.cols - pixels, frame.rows)));
-            break;
-        default:
-            std::cout << "Shift direction is not set properly" << std::endl;
-        }
-        return temp;
-    }
-
-    float FeatureTracker::residuals(const cv::Mat &data1, const cv::Mat &data2, Eigen::VectorXf &res)
+    float FeatureTracker::residuals(const cv::Mat &data1, const cv::Mat &data2, Eigen::VectorXf &res) const
     {
         cv::Mat d = data1 - data2;
 
@@ -336,7 +316,6 @@ namespace feature_tracker
         const Eigen::Matrix<float, 4, 4> A2 = (Eigen::Matrix<float, 4, 4>() << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0).finished();
         const Eigen::Matrix<float, 4, 4> A3 = (Eigen::Matrix<float, 4, 4>() << 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0).finished();
 
-
          Eigen::Matrix<float,3, 3, Eigen::RowMajor> H1 = M1_ * A1 * M2_;
          Eigen::Matrix<float,3, 3, Eigen::RowMajor> H2 = M1_ * A2 * M2_;
          Eigen::Matrix<float,3, 3, Eigen::RowMajor> H3 = M1_ * A3 * M2_;
@@ -346,7 +325,6 @@ namespace feature_tracker
         Eigen::Map<Eigen::MatrixXf> H191(H1.data(), 9,1);
         Eigen::Map<Eigen::MatrixXf> H291(H2.data(), 9,1);
         Eigen::Map<Eigen::MatrixXf> H391(H3.data(), 9,1);
-
 
         Jg.block(0,0,9,1) = H191;
         Jg.block(0,1,9,1) = H291;

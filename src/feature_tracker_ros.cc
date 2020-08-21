@@ -48,7 +48,7 @@ namespace feature_tracker
         int win_size = 160;
         tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f((width - win_size)/2, (height - win_size)/2, win_size, win_size), scale_inv, superpoint);
         //debug
-#if 1
+#if 0
 /*
         {
             cv::Mat img_gray0;
@@ -83,6 +83,7 @@ namespace feature_tracker
 #endif
 
         img_sub_ = nh.subscribe("web_camera/image_rect", 1000, &FeatureTrackerROS::imageCallback, this);
+        std::cout<<"Waiting image."<<std::endl;
 
 
     }
