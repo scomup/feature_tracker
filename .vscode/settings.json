@@ -72,6 +72,9 @@
         "__nullptr": "cpp",
         "*.ipp": "cpp",
         "dense": "cpp",
-        "ios": "cpp"
+        "ios": "cpp",
+        "core": "cpp",
+        "queue": "cpp",
+        "stack": "cpp"
     }
 }

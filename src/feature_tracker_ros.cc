@@ -36,6 +36,7 @@ namespace feature_tracker
 
         Eigen::Matrix3f K = Eigen::Matrix3f::Identity();
 
+        float scale_inv = 1;
         K(0, 0) = fx;
         K(1, 1) = fy;
         K(0, 2) = cx;
@@ -44,16 +45,18 @@ namespace feature_tracker
         Eigen::Matrix3f Rvc = common::EulertoMatrix3d<float>(Eigen::Vector3f(pitch, roll, yaw));
 
         SuperpointFrontend* superpoint = new SuperpointFrontend(module_path, height, width);
-        tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f(240, 100, 160, 160), superpoint);
-
+        int win_size = 160;
+        tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f((width - win_size)/2, (height - win_size)/2, win_size, win_size), scale_inv, superpoint);
         //debug
+#if 1
+/*
         {
             cv::Mat img_gray0;
-            cv::Mat img0 = cv::imread("/home/liu/bag/wlo60/frame0100.png");
+            cv::Mat img0 = cv::imread("/home/liu/bag/wlo60/frame1487.png");
             cv::cvtColor(img0, img_gray0, cv::COLOR_BGR2GRAY);
 
             cv::Mat img_gray1;
-            cv::Mat img1 = cv::imread("/home/liu/bag/wlo60/frame0104.png");
+            cv::Mat img1 = cv::imread("/home/liu/bag/wlo60/frame1488.png");
             cv::cvtColor(img1, img_gray1, cv::COLOR_BGR2GRAY);
 
             //imshow("w0",img_gray0);
@@ -62,17 +65,30 @@ namespace feature_tracker
             tracker_->track(img_gray0);
             tracker_->track(img_gray1);
             tracker_->show(img_gray1);
+            //cv::waitKey();
 
         }
+    */
+        for (int i = 0; i < 1487; i++)
+        {
+            char fn[200];
+            sprintf(fn,"/home/liu/bag/wlo60/frame%04d.png",i);
+            //printf(fn);
+            cv::Mat img = cv::imread(fn);
+            cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
 
-        
+            tracker_->track(img);
+            tracker_->show(img);
+        }
+#endif
+
         img_sub_ = nh.subscribe("web_camera/image_rect", 1000, &FeatureTrackerROS::imageCallback, this);
 
 
     }
     void FeatureTrackerROS::imageCallback(const sensor_msgs::ImageConstPtr &msg)
     {
-        double time = msg->header.stamp.toSec();
+        //double time = msg->header.stamp.toSec();
 
         cv_bridge::CvImageConstPtr cv_ptr;
         try
@@ -86,6 +102,9 @@ namespace feature_tracker
         }
         cv::Mat img;
         cv_ptr->image.copyTo(img);
+
+        tracker_->track(img);
+        tracker_->show(img);
 
     }
 } // namespace feature_tracker

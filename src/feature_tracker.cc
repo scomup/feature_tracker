@@ -17,36 +17,54 @@ namespace feature_tracker
     FeatureTracker::FeatureTracker(const Eigen::Matrix3f &Rvc,
                                    const Eigen::Matrix3f &K,
                                    const Eigen::Vector4f &rect,
+                                   const int scale,
                                    SuperpointFrontend *kp_frontend)
-        : rect_(rect),
+        : rect_(rect(0)/scale,rect(1)/scale,rect(2)/scale,rect(3)/scale),
+          scale_(scale),
           kp_frontend_(kp_frontend)
     {
         Eigen::Matrix3f Rcv = Rvc.inverse();
-        Eigen::Matrix3f Kinv = K.inverse();
+        Eigen::Matrix3f Ks = K;
+        Ks /= scale;
+        Ks(2,2) = 1;
+        Eigen::Matrix3f Ksinv = Ks.inverse();
 
         Eigen::Matrix<float, 3, 4> M = (Eigen::Matrix<float, 3, 4>() << 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., -1.).finished();
         Eigen::Matrix<float, 4, 3> N = (Eigen::Matrix<float, 4, 3>() << 1., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., -1.).finished();
-        M1_ = K * Rcv * M;
-        M2_ = N * Rvc * Kinv;
+        M1_ = Ks * Rcv * M;
+        M2_ = N * Rvc * Ksinv;
 
         Hroi_ = Eigen::Matrix3f::Identity();
         Hroi_(0,2) = rect_(0);
         Hroi_(1,2) = rect_(1);
+        T0_ = Eigen::Matrix4f::Identity();
         precompute();
+    }
+    Eigen::Matrix3f FeatureTracker::getH() const{
+        return  M1_ * T0_ * M2_;
     }
 
     void FeatureTracker::track(const cv::Mat& img)
     {
         auto t0 = std::chrono::system_clock::now();
-        cv::Mat desc1d = kp_frontend_->getDesc1D(img);
-        auto t1 = std::chrono::system_clock::now();
-        double elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(t1-t0).count();
-        std::cout<<"get desc:"<<elapsed0<<std::endl;
+#if 1
+        cv::Mat desc = kp_frontend_->getDesc1D(img);
+        //double elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        //std::cout<<"get desc:"<<elapsed0<<std::endl;
 
-        cv::resize(desc1d, liv_data_, cv::Size(640,360),cv::INTER_CUBIC);
-        auto t2 = std::chrono::system_clock::now();
-        double elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
-        std::cout<<"resize :"<<elapsed1<<std::endl;
+        if (scale_ != 8)
+            cv::resize(desc, liv_data_, cv::Size(img.cols / scale_, img.rows / scale_), cv::INTER_CUBIC);
+        else
+            liv_data_ = desc;
+#else
+        cv::Mat desc;
+        img.convertTo(desc, CV_32FC1, 1.0 / 255.0);
+        liv_data_ = desc;
+
+#endif
+        //auto t2 = std::chrono::system_clock::now();
+        //double elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
+        //std::cout<<"resize :"<<elapsed1<<std::endl;
 
         if(ref_data_.empty())
         {
@@ -58,14 +76,12 @@ namespace feature_tracker
         cv::Mat ref_data_roi = ref_data_(roi);
 
         auto ref_dxdy = dataGradient(ref_data_roi);
-        auto t3 = std::chrono::system_clock::now();
+        //auto t3 = std::chrono::system_clock::now();
 
-        double elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count();
-        std::cout<<"get ref_dxdy :"<<elapsed2<<std::endl;
+        //double elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count();
+        //std::cout<<"get ref_dxdy :"<<elapsed2<<std::endl;
 
-        Eigen::Matrix4f Tvlvr = Eigen::Matrix4f::Identity();
-        Eigen::Matrix3f H = Eigen::Matrix3f::Identity();
-        Eigen::Vector3f x0 = Eigen::Vector3f::Zero();
+        Eigen::Matrix4f Tvlvr = T0_;
 
         const int width = ref_data_roi.cols;
         const int height = ref_data_roi.rows;
@@ -75,42 +91,43 @@ namespace feature_tracker
         int cnt = 0;
         while (true)
         {
-            auto t4 = std::chrono::system_clock::now();
+            //auto t4 = std::chrono::system_clock::now();
+            auto H = getH();
             cv::Mat liv_data_roi = getLivData(H);
-            auto t5 = std::chrono::system_clock::now();
-            double elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(t5-t4).count();
-            std::cout<<"getLivData: "<<elapsed4<<std::endl;
+            //auto t5 = std::chrono::system_clock::now();
+            //double elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(t5-t4).count();
+            //std::cout<<"getLivData: "<<elapsed4<<std::endl;
 
-            auto t6 = std::chrono::system_clock::now();
+            //auto t6 = std::chrono::system_clock::now();
             Eigen::VectorXf res;
             const float err = residuals(liv_data_roi, ref_data_roi, res);
-            auto t7 = std::chrono::system_clock::now();
-            double elapsed6 = std::chrono::duration_cast<std::chrono::microseconds>(t7-t6).count();
-            std::cout<<"residuals: "<<elapsed6<<std::endl;
+            //auto t7 = std::chrono::system_clock::now();
+            //double elapsed6 = std::chrono::duration_cast<std::chrono::microseconds>(t7-t6).count();
+            //std::cout<<"residuals: "<<elapsed6<<std::endl;
 
             if (last_err - err < 0.0000001)
                 break;
             cnt++;
             last_err = err;
-            std::cout<<"error: "<<err<<std::endl;
+            //std::cout<<"error: "<<err<<std::endl;
 
-            auto t8 = std::chrono::system_clock::now();
+            //auto t8 = std::chrono::system_clock::now();
             auto liv_dxdy = dataGradient(liv_data_roi);
-            auto t9 = std::chrono::system_clock::now();
-            double elapsed8 = std::chrono::duration_cast<std::chrono::microseconds>(t9-t8).count();
-            std::cout<<"get liv_dxdy: "<<elapsed8<<std::endl;
+            //auto t9 = std::chrono::system_clock::now();
+            //double elapsed8 = std::chrono::duration_cast<std::chrono::microseconds>(t9-t8).count();
+            //std::cout<<"get liv_dxdy: "<<elapsed8<<std::endl;
 
             Eigen::MatrixXf J(elements, 3);
-            for(int i = 0; i < JwJg_.size(); i++)
+            for(int i = 0; i < (int)JwJg_.size(); i++)
             {
                 auto& JwJg = JwJg_[i];
                 auto Ji = (liv_dxdy[i] + ref_dxdy[i])/2;
                 auto JiJwJg = Ji * JwJg;
                 J.block(i,0,1,3) = JiJwJg;
             }
-            auto t10 = std::chrono::system_clock::now();
-            double elapsed9 = std::chrono::duration_cast<std::chrono::microseconds>(t10-t9).count();
-            std::cout<<"get JiJgJw: "<<elapsed9<<std::endl;
+            //auto t10 = std::chrono::system_clock::now();
+            //double elapsed9 = std::chrono::duration_cast<std::chrono::microseconds>(t10-t9).count();
+            //std::cout<<"get JiJgJw: "<<elapsed9<<std::endl;
 
             auto hessian = J.transpose() * J;
             auto hessian_inv = hessian.inverse();
@@ -118,18 +135,18 @@ namespace feature_tracker
             auto x0 = hessian_inv * temp;
             auto dT = exp(x0);
             Tvlvr = Tvlvr * dT;
-            H = M1_ * Tvlvr * M2_;
-            H_ = H;
-            auto t11 = std::chrono::system_clock::now();
-            double elapsed10 = std::chrono::duration_cast<std::chrono::microseconds>(t11-t10).count();
-            std::cout<<"get H: "<<elapsed10<<std::endl;
-            std::cout<<"--------------------->"<<cnt<<std::endl;
+             
+            //auto t11 = std::chrono::system_clock::now();
+            //double elapsed10 = std::chrono::duration_cast<std::chrono::microseconds>(t11-t10).count();
+            //std::cout<<"get H: "<<elapsed10<<std::endl;
+            //std::cout<<"--------------------->"<<cnt<<std::endl;
             //show(img, H);
         }
+        liv_data_.copyTo(ref_data_);
+        T0_ = Tvlvr;
         auto t12 = std::chrono::system_clock::now();
-        double elapsed120 = std::chrono::duration_cast<std::chrono::microseconds>(t12-t0).count();
-        std::cout<<"total loop: "<<cnt<<std::endl;
-        std::cout<<"total time: "<<elapsed120<<std::endl;
+        double elapsed120 = std::chrono::duration_cast<std::chrono::milliseconds>(t12-t0).count();
+        std::cout<<"total loop: "<<cnt<<"  time: "<<elapsed120<<std::endl;
     }
     
     void FeatureTracker::show(const cv::Mat &img) const 
@@ -144,10 +161,10 @@ namespace feature_tracker
             cv::Point c(rect_[0]+rect_[3], rect_[1]);
             cv::Point d(rect_[0]+rect_[3], rect_[1]+rect_[2]);
 
-            cv::line(img_color, a, b, cv::Scalar(0, 200, 200), 2, CV_AA);
-            cv::line(img_color, b, d, cv::Scalar(0, 200, 200), 2, CV_AA);
-            cv::line(img_color, d, c, cv::Scalar(0, 200, 200), 2, CV_AA);
-            cv::line(img_color, c, a, cv::Scalar(0, 200, 200), 2, CV_AA);
+            cv::line(img_color, a*scale_, b*scale_, cv::Scalar(0, 200, 200), 2, CV_AA);
+            cv::line(img_color, b*scale_, d*scale_, cv::Scalar(0, 200, 200), 2, CV_AA);
+            cv::line(img_color, d*scale_, c*scale_, cv::Scalar(0, 200, 200), 2, CV_AA);
+            cv::line(img_color, c*scale_, a*scale_, cv::Scalar(0, 200, 200), 2, CV_AA);
         }
 
         {
@@ -156,7 +173,7 @@ namespace feature_tracker
             Eigen::Vector3f p2(rect_[3], 0., 1.);
             Eigen::Vector3f p3(rect_[3], rect_[2], 1.);
 
-            const Eigen::Matrix3f tempH = Hroi_ * H_;
+            const Eigen::Matrix3f tempH = Hroi_ * getH();
             p0 = tempH * p0;
             p0 /= p0.z();
             p1 = tempH * p1;
@@ -170,21 +187,21 @@ namespace feature_tracker
             cv::Point c(p2.x(), p2.y());
             cv::Point d(p3.x(), p3.y());
 
-            cv::line(img_color, a, b, cv::Scalar(0, 200, 0), 2, CV_AA);
-            cv::line(img_color, b, d, cv::Scalar(0, 200, 0), 2, CV_AA);
-            cv::line(img_color, d, c, cv::Scalar(0, 200, 0), 2, CV_AA);
-            cv::line(img_color, c, a, cv::Scalar(0, 200, 0), 2, CV_AA);
+            cv::line(img_color, a*scale_, b*scale_, cv::Scalar(0, 200, 0), 2, CV_AA);
+            cv::line(img_color, b*scale_, d*scale_, cv::Scalar(0, 200, 0), 2, CV_AA);
+            cv::line(img_color, d*scale_, c*scale_, cv::Scalar(0, 200, 0), 2, CV_AA);
+            cv::line(img_color, c*scale_, a*scale_, cv::Scalar(0, 200, 0), 2, CV_AA);
         }
 
 
         cv::imshow("w", img_color);
-        cv::waitKey();
+        cv::waitKey(1);
     }
 
     Eigen::Matrix4f FeatureTracker::exp(const Eigen::Vector3f& x) const
     {
         Eigen::Matrix4f A = Eigen::Matrix4f::Zero();
-        for(int i = 0; i < A_.size(); i++)
+        for(int i = 0; i < (int)A_.size(); i++)
         {
             A += x[i] * A_[i];
         }
@@ -296,7 +313,6 @@ namespace feature_tracker
         const int height = data1.rows;
 
         res.resize(width * height);
-        int cnt = 0;
         float m = 0;
         for (int i = 0; i < height; i++)
         {
