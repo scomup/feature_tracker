@@ -38,15 +38,14 @@ namespace feature_tracker
     void FeatureTracker::track(const cv::Mat& img)
     {
         auto t0 = std::chrono::system_clock::now();
-        cv::Mat desc = kp_frontend_->getDesc(img);
-        //cv::Mat desc1d = kp_frontend_->getDesc1D(img);
-        
+        cv::Mat desc1d = kp_frontend_->getDesc1D(img);
         auto t1 = std::chrono::system_clock::now();
-        double elapsed0 = std::chrono::duration_cast<std::chrono::milliseconds>(t1-t0).count();
+        double elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(t1-t0).count();
         std::cout<<"get desc:"<<elapsed0<<std::endl;
-        cv::resize(desc, liv_data_, cv::Size(640,360),cv::INTER_CUBIC);
+
+        cv::resize(desc1d, liv_data_, cv::Size(640,360),cv::INTER_CUBIC);
         auto t2 = std::chrono::system_clock::now();
-        double elapsed1 = std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count();
+        double elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
         std::cout<<"resize :"<<elapsed1<<std::endl;
 
         if(ref_data_.empty())
@@ -61,7 +60,7 @@ namespace feature_tracker
         auto ref_dxdy = dataGradient(ref_data_roi);
         auto t3 = std::chrono::system_clock::now();
 
-        double elapsed2 = std::chrono::duration_cast<std::chrono::milliseconds>(t3-t2).count();
+        double elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count();
         std::cout<<"get ref_dxdy :"<<elapsed2<<std::endl;
 
         Eigen::Matrix4f Tvlvr = Eigen::Matrix4f::Identity();
@@ -70,8 +69,7 @@ namespace feature_tracker
 
         const int width = ref_data_roi.cols;
         const int height = ref_data_roi.rows;
-        const int channels = ref_data_roi.channels();
-        const int elements = width * height * channels;
+        const int elements = width * height;
 
         float last_err = 100000;
         int cnt = 0;
@@ -80,37 +78,39 @@ namespace feature_tracker
             auto t4 = std::chrono::system_clock::now();
             cv::Mat liv_data_roi = getLivData(H);
             auto t5 = std::chrono::system_clock::now();
-            double elapsed4 = std::chrono::duration_cast<std::chrono::milliseconds>(t5-t4).count();
-            std::cout<<"getLivData :"<<elapsed4<<std::endl;
+            double elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(t5-t4).count();
+            std::cout<<"getLivData: "<<elapsed4<<std::endl;
+
             auto t6 = std::chrono::system_clock::now();
             Eigen::VectorXf res;
             const float err = residuals(liv_data_roi, ref_data_roi, res);
             auto t7 = std::chrono::system_clock::now();
-            double elapsed6 = std::chrono::duration_cast<std::chrono::milliseconds>(t7-t6).count();
-            std::cout<<"residuals :"<<elapsed6<<std::endl;
+            double elapsed6 = std::chrono::duration_cast<std::chrono::microseconds>(t7-t6).count();
+            std::cout<<"residuals: "<<elapsed6<<std::endl;
 
             if (last_err - err < 0.0000001)
                 break;
             cnt++;
             last_err = err;
             std::cout<<"error: "<<err<<std::endl;
+
             auto t8 = std::chrono::system_clock::now();
             auto liv_dxdy = dataGradient(liv_data_roi);
             auto t9 = std::chrono::system_clock::now();
-            double elapsed8 = std::chrono::duration_cast<std::chrono::milliseconds>(t9-t8).count();
-            std::cout<<"get liv_dxdy :"<<elapsed8<<std::endl;
+            double elapsed8 = std::chrono::duration_cast<std::chrono::microseconds>(t9-t8).count();
+            std::cout<<"get liv_dxdy: "<<elapsed8<<std::endl;
 
             Eigen::MatrixXf J(elements, 3);
             for(int i = 0; i < JwJg_.size(); i++)
             {
                 auto& JwJg = JwJg_[i];
                 auto Ji = (liv_dxdy[i] + ref_dxdy[i])/2;
-                auto JiJgJw = Ji * JwJg;
-                J.block(256*i,0,256,3) = JiJgJw;
+                auto JiJwJg = Ji * JwJg;
+                J.block(i,0,1,3) = JiJwJg;
             }
             auto t10 = std::chrono::system_clock::now();
-            double elapsed9 = std::chrono::duration_cast<std::chrono::milliseconds>(t10-t9).count();
-            std::cout<<"get JiJgJw :"<<elapsed9<<std::endl;
+            double elapsed9 = std::chrono::duration_cast<std::chrono::microseconds>(t10-t9).count();
+            std::cout<<"get JiJgJw: "<<elapsed9<<std::endl;
 
             auto hessian = J.transpose() * J;
             auto hessian_inv = hessian.inverse();
@@ -121,15 +121,15 @@ namespace feature_tracker
             H = M1_ * Tvlvr * M2_;
             H_ = H;
             auto t11 = std::chrono::system_clock::now();
-            double elapsed10 = std::chrono::duration_cast<std::chrono::milliseconds>(t11-t10).count();
-            std::cout<<"get H :"<<elapsed10<<std::endl;
-            std::cout<<"---------------------"<<elapsed10<<std::endl;
-            //exit(0);
-
-            //std::cout<<H<<std::endl;
+            double elapsed10 = std::chrono::duration_cast<std::chrono::microseconds>(t11-t10).count();
+            std::cout<<"get H: "<<elapsed10<<std::endl;
+            std::cout<<"--------------------->"<<cnt<<std::endl;
             //show(img, H);
         }
-        std::cout<<"total loop:"<<cnt<<std::endl;
+        auto t12 = std::chrono::system_clock::now();
+        double elapsed120 = std::chrono::duration_cast<std::chrono::microseconds>(t12-t0).count();
+        std::cout<<"total loop: "<<cnt<<std::endl;
+        std::cout<<"total time: "<<elapsed120<<std::endl;
     }
     
     void FeatureTracker::show(const cv::Mat &img) const 
@@ -202,6 +202,7 @@ namespace feature_tracker
 
     cv::Mat FeatureTracker::getLivData(Eigen::Matrix3f &H) const
     {
+        
         Eigen::Matrix3f Heigen = Hroi_ * H;
         cv::Mat liv_data, Hcv;
         cv::eigen2cv(Heigen, Hcv);
@@ -209,66 +210,55 @@ namespace feature_tracker
         return liv_data;
     }
 
-    std::vector<Eigen::Matrix<float, 256, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 256, 2>>>
+    std::vector<Eigen::Matrix<float, 1, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 1, 2>>>
     FeatureTracker::dataGradient(const cv::Mat &data) const
     {
-        
+        /*
         cv::Mat dx = shiftFrame(data, 1, 3) - data;
         cv::Mat dy = shiftFrame(data, 1, 0) - data;
 
-        int width = data.cols;
-        int height = data.rows;
-        int channels = data.channels();
+        const int width = data.cols;
+        const int height = data.rows;
 
-        std::vector<Eigen::Matrix<float, 256, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 256, 2>>> gradient;
+        std::vector<Eigen::Matrix<float, 1, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 1, 2>>> gradient;
         for (int i = 0; i < height; i++)
         {
             for (int j = 0; j < width; j++)
             {
-                Eigen::Map<Eigen::VectorXf> dxij(dx.ptr<float>(i, j), 256);
-                Eigen::Map<Eigen::VectorXf> dyij(dy.ptr<float>(i, j), 256);
-
-                Eigen::Matrix<float, 256, 2> dxdy;
-                dxdy.block(0, 0, 256, 1) = dxij;
-                dxdy.block(0, 1, 256, 1) = dyij;
-                //std::cout<<dxij<<std::endl;
+                Eigen::Matrix<float, 1, 2> dxdy;
+                dxdy(0,0) = *dx.ptr<float>(i, j);
+                dxdy(0,1) = *dy.ptr<float>(i, j);
                 gradient.push_back(dxdy);
-            }
-        }
-        
-        /*
-        int width = data.cols;
-        int height = data.rows;
-        int channels = data.channels();
-
-        std::vector<Eigen::Matrix<float, 256, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 256, 2>>> gradient;
-        for (int i = 0; i < height; i++)
-        {
-            for (int j = 0; j < width; j++)
-            {
-                Eigen::VectorXf dx;
-                Eigen::VectorXf dy;
-                if ((j == width - 1) || (i == height - 1))
-                {
-                    dx = Eigen::VectorXf::Zero(256);
-                    dy = Eigen::VectorXf::Zero(256);
-                }
-                else
-                {
-                    const Eigen::Map<const Eigen::VectorXf> data_i0j0(data.ptr<float>(i, j), 256);
-                    const Eigen::Map<const Eigen::VectorXf> data_i1j0(data.ptr<float>(i + 1, j), 256);
-                    const Eigen::Map<const Eigen::VectorXf> data_i0j1(data.ptr<float>(i, j + 1), 256);
-                    dx = data_i1j0 - data_i0j0;
-                    dy = data_i0j1 - data_i0j0;
-                }
-                Eigen::Matrix<float, 256, 2> dxdy;
-                dxdy.block(0, 0, 256, 1) = dx;
-                dxdy.block(0, 1, 256, 1) = dy;
-                gradient.push_back(dxdy);
-                //std::cout << dxdy << std::endl;
             }
         }
         */
+        const int width = data.cols;
+        const int height = data.rows;
+
+        std::vector<Eigen::Matrix<float, 1, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 1, 2>>> gradient;
+        for (int i = 0; i < height; i++)
+        {
+            
+            for (int j = 0; j < width; j++)
+            {
+                float x00, x01, x10;
+                x00 = *data.ptr<float>(i, j);
+                if(j+1==width)
+                    x01 = 0;
+                else
+                    x01 = *data.ptr<float>(i, j+1);
+                if(i+1==height)
+                    x10 = 0;
+                else
+                    x10 = *data.ptr<float>(i+1, j);
+
+                Eigen::Matrix<float, 1, 2> dxdy;
+                dxdy(0,0) = x01 - x00;
+                dxdy(0,1) = x10 - x00;
+                gradient.push_back(dxdy);
+            }
+        }
+
 
         return gradient;
     }
@@ -300,12 +290,12 @@ namespace feature_tracker
 
     float FeatureTracker::residuals(const cv::Mat &data1, const cv::Mat &data2, Eigen::VectorXf &res)
     {
+        cv::Mat d = data1 - data2;
 
         const int width = data1.cols;
         const int height = data1.rows;
-        const int channels = data1.channels();
 
-        res.resize(width * height * channels);
+        res.resize(width * height);
         int cnt = 0;
         float m = 0;
         for (int i = 0; i < height; i++)
@@ -315,22 +305,12 @@ namespace feature_tracker
                 const float *pxl1 = data1.ptr<float>(i, j);
                 const float *pxl2 = data2.ptr<float>(i, j);
 
-                for (int c = 0; c < channels; c++)
-                {
-                    const float r = *(pxl1 + c) - *(pxl2 + c);
-                    m += r*r;
-                    res(i * width * channels + j * channels + c) = r;
-                }
+                const float r = *(pxl1) - *(pxl2);
+                m += r*r;
+                res(i * width  + j) = r;
             }
         }
         float err = std::sqrt(m / width / height);
-
-        //cv::cv2eigen(r,)
-        //Eigen::Map<Eigen::VectorXf> eigenT(r.data(), r.rows * r.cols * r.dims);
-
-        //Eigen::Map<Eigen::VectorXf> dxij(dx.ptr<float>(i, j), 256);
-        //m = np.sum(residuals * residuals) return np.sqrt(m / (self.rect[2] * self.rect[3])),
-        //residuals.reshape(-1)
         return err;
     }
 

@@ -25,7 +25,7 @@ class FeatureTracker
 
   private:
     void precompute();
-    std::vector<Eigen::Matrix<float, 256, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 256, 2>>> dataGradient(const cv::Mat &data) const;
+    std::vector<Eigen::Matrix<float, 1, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 1, 2>>> dataGradient(const cv::Mat &data) const;
     cv::Mat shiftFrame(const cv::Mat frame, const int pixels, const int direction) const;
 
     float residuals(const cv::Mat &data1, const cv::Mat &data2, Eigen::VectorXf &res);
