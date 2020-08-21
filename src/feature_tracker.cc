@@ -39,6 +39,8 @@ namespace feature_tracker
     {
         auto t0 = std::chrono::system_clock::now();
         cv::Mat desc = kp_frontend_->getDesc(img);
+        //cv::Mat desc1d = kp_frontend_->getDesc1D(img);
+        
         auto t1 = std::chrono::system_clock::now();
         double elapsed0 = std::chrono::duration_cast<std::chrono::milliseconds>(t1-t0).count();
         std::cout<<"get desc:"<<elapsed0<<std::endl;
@@ -72,7 +74,7 @@ namespace feature_tracker
         const int elements = width * height * channels;
 
         float last_err = 100000;
-
+        int cnt = 0;
         while (true)
         {
             auto t4 = std::chrono::system_clock::now();
@@ -89,6 +91,7 @@ namespace feature_tracker
 
             if (last_err - err < 0.0000001)
                 break;
+            cnt++;
             last_err = err;
             std::cout<<"error: "<<err<<std::endl;
             auto t8 = std::chrono::system_clock::now();
@@ -120,11 +123,13 @@ namespace feature_tracker
             auto t11 = std::chrono::system_clock::now();
             double elapsed10 = std::chrono::duration_cast<std::chrono::milliseconds>(t11-t10).count();
             std::cout<<"get H :"<<elapsed10<<std::endl;
-            exit(0);
+            std::cout<<"---------------------"<<elapsed10<<std::endl;
+            //exit(0);
 
             //std::cout<<H<<std::endl;
             //show(img, H);
         }
+        std::cout<<"total loop:"<<cnt<<std::endl;
     }
     
     void FeatureTracker::show(const cv::Mat &img) const 

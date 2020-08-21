@@ -29,6 +29,7 @@ public:
                      float image_w_);
 
   cv::Mat getDesc(const cv::Mat &img);
+  cv::Mat getDesc1D(const cv::Mat &img);
 
 private:
     torch::jit::script::Module module_;

@@ -89,4 +89,46 @@ cv::Mat SuperpointFrontend::getDesc(const cv::Mat &img)
     return desc;
 }
 
+cv::Mat SuperpointFrontend::getDesc1D(const cv::Mat &img)
+{
+    cv::Mat image;
+    img.convertTo(image, CV_32FC1); // or CV_32F works (too)
+    image /= 255.;
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+
+    cudaMemcpy(buffer_[0], image.data, image_h_ * image_w_ * sizeof(float), cudaMemcpyHostToDevice);
+
+    context_->enqueue(1, buffer_, stream, nullptr);
+
+    float* desc_buffer = new float[image_h_ * image_w_ / 64 * 256];
+
+    cudaMemcpy(desc_buffer, buffer_[2], image_h_ * image_w_ / 64 * 256 * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    torch::Tensor coarse_desc = torch::from_blob(desc_buffer, at::IntList({1, 256, image_h_ / 8, image_w_ / 8}), at::ScalarType::Float);
+    auto dn = coarse_desc.norm(2, 1);
+    coarse_desc = coarse_desc.div(at::unsqueeze(dn, 1));
+    coarse_desc = at::sum(coarse_desc, 1);
+
+    cv::Mat desc(image_h_ / 8, image_w_ / 8, CV_32FC1);
+
+    auto _desc_a = coarse_desc.accessor<float, 3>();
+
+    int width = desc.cols;
+    int height = desc.rows;
+    int channels = desc.channels();
+
+    for (int i = 0; i < height; i++)
+    {
+        for (int j = 0; j < width; j++)
+        {
+            float* pxl = desc.ptr<float>(i, j); 
+            *(pxl) = _desc_a[0][i][j]; 
+        }
+    }
+    
+    return desc;
+}
+
+
 } // namespace visual_odometry
