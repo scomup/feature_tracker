@@ -35,13 +35,14 @@ namespace feature_tracker
         M2_ = N * Rvc * Ksinv;
 
         Tvlvr_ = Eigen::Matrix4f::Identity();
+        Twvl_ = Eigen::Matrix4f::Identity();
         precompute();
     }
     inline Eigen::Matrix3f FeatureTracker::getH() const{
         return  M1_ * Tvlvr_ * M2_;
     }
 
-    void FeatureTracker::track(const cv::Mat& img)
+    bool FeatureTracker::track(const cv::Mat& img)
     {
         auto t0 = std::chrono::system_clock::now();
 #if 1
@@ -66,7 +67,7 @@ namespace feature_tracker
         if(ref_data_.empty())
         {
             liv_data_.copyTo(ref_data_);
-            return;
+            return false;
         }
 
         cv::Rect roi(rect_(0), rect_(1), rect_(2), rect_(3));
@@ -139,11 +140,22 @@ namespace feature_tracker
             //std::cout<<"--------------------->"<<cnt<<std::endl;
             //show(img, H);
         }
+        static double th = 0;
         liv_data_.copyTo(ref_data_);
         Tvlvr_ = Tvlvr;
+        //std::cout<<"Tvlvr track:\n"<<Tvlvr<<std::endl;
+        Twvl_ = Twvl_ * Tvlvr.inverse();
+        double dth = std::atan2(Tvlvr_(1, 0), Tvlvr_(0, 0));
+        double th__ = std::atan2(Twvl_(1, 0), Twvl_(0, 0));
+        th += dth;
+        std::cout<<th<<std::endl;
+        std::cout<<th__<<std::endl;
+        std::cout<<"---------"<<std::endl;
+        //std::cout<<Twvl_<<std::endl;
         auto t12 = std::chrono::system_clock::now();
         double elapsed120 = std::chrono::duration_cast<std::chrono::milliseconds>(t12-t0).count();
-        std::cout<<"total loop: "<<cnt<<"  time: "<<elapsed120<<std::endl;
+        //std::cout<<"total loop: "<<cnt<<"  time: "<<elapsed120<<std::endl;
+        return true;
     }
     
     void FeatureTracker::show(const cv::Mat &img) const 
@@ -230,6 +242,10 @@ namespace feature_tracker
         //cv::warpPerspective(liv_data_, liv_data, Hcv, cv::Size(rect_[2], rect_[3]), cv::INTER_CUBIC + cv::WARP_INVERSE_MAP);
         
         return liv_data;
+    }
+    Eigen::Matrix4f FeatureTracker::getTwvl() const
+    {
+        return Twvl_;
     }
 
     std::vector<Eigen::Matrix<float, 1, 2>, Eigen::aligned_allocator<Eigen::Matrix<float, 1, 2>>>
@@ -334,9 +350,9 @@ namespace feature_tracker
         A_.push_back(A2);
         A_.push_back(A3);
 
-        for (int v = 0; v < rect_(2); v++)//row
+        for (float v = 0.5; v < rect_(2); v+=1)//row
         {
-            for (int u = 0; u < rect_(3); u++)//col
+            for (float u = 0.5; u < rect_(3); u+=1)//col
             {
                 Eigen::Matrix<float, 2, 9> Jw =
                     (Eigen::Matrix<float, 2, 9>()

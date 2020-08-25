@@ -21,8 +21,9 @@ class FeatureTracker
                    const Eigen::Vector4f &rect,
                    const int scale,
                    FeatureExtraction *kp_frontend);
-    void track(const cv::Mat& img);
+    bool track(const cv::Mat& img);
     void show(const cv::Mat &img) const;
+    Eigen::Matrix4f getTwvl() const;
 
   private:
     void precompute();
@@ -41,7 +42,8 @@ class FeatureTracker
     const Eigen::Vector4f rect_;
     const float scale_;
     FeatureExtraction* kp_frontend_;
-    Eigen::Matrix4f Tvlvr_;
+    Eigen::Matrix4f Tvlvr_;//Consider vl('live' vehicle) as origin. The coordinates of vr('ref' vehicle)
+    Eigen::Matrix4f Twvl_;//The pose of vl('live' vehicle pose) in world coordinate.//what we want to know
     cv::Mat ref_data_;
     cv::Mat liv_data_;
 };

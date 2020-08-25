@@ -4,14 +4,8 @@
 
 #include <torch/script.h>
 #include <torch/torch.h>
-
 #include <opencv2/opencv.hpp>
-
-//#include <opencv2/dnn.hpp>
 #include <yaml-cpp/yaml.h>
-//#include <eigen3/Eigen/Dense>
-//#include <eigen3/Eigen/Geometry>
-//#include <math.h>
 #include <NvInfer.h>
 #include <NvCaffeParser.h>
 
@@ -32,7 +26,6 @@ public:
   cv::Mat getDesc1D(const cv::Mat &img);
 
 private:
-    torch::jit::script::Module module_;
     nvinfer1::IExecutionContext* context_;
     nvinfer1::ICudaEngine *engine_;
     void* buffer_[2];

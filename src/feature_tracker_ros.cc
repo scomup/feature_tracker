@@ -7,6 +7,8 @@
 #include <Eigen/Dense>
 
 #include "feature_tracker_ros.h"
+#include <nav_msgs/Odometry.h>
+#include <tf/transform_broadcaster.h>
 #include "common/math.h"
 
 namespace feature_tracker
@@ -18,9 +20,16 @@ namespace feature_tracker
         ros::NodeHandle nh;
 
         float pitch, roll, yaw;
-        private_nh.param<float>("pitch", pitch, 0.8674);
-        private_nh.param<float>("roll", roll, -0.0275);
-        private_nh.param<float>("yaw", yaw, -0.0127);
+        //./visual_odometry -b 200 -s 1 -f /home/liu/bag/vodom/angle30.bag  -l calib.txt -n 100 -m 0
+        private_nh.param<float>("pitch", pitch, 0.672059);
+        private_nh.param<float>("roll", roll, -0.0156828);
+        private_nh.param<float>("yaw", yaw, -0.00547772);
+
+
+        //./visual_odometry -b 200 -s 1 -f /home/liu/bag/kadoma/wloloop30.bag  -l odom.txt -n 100 -m 0
+        //private_nh.param<float>("pitch", pitch, 0.485258);
+        //private_nh.param<float>("roll", roll, 0.0093976);
+        //private_nh.param<float>("yaw", yaw, 0.00232597);
 
         float fx, fy, cx, cy;
         private_nh.param<float>("fx", fx, 329.749817);
@@ -33,22 +42,23 @@ namespace feature_tracker
         private_nh.param<std::string>("module_path", module_path, "/home/liu/catkin_ws/src/feature_tracker/weight/feature_net.engine");
         private_nh.param<int>("width", width, 640);
         private_nh.param<int>("height", height, 360);
+        odom_pub_ = nh.advertise<nav_msgs::Odometry>("visual_odom", 50);
 
         Eigen::Matrix3f K = Eigen::Matrix3f::Identity();
 
-        float scale_inv = 1;
+        float scale_inv = 8;
         K(0, 0) = fx;
         K(1, 1) = fy;
         K(0, 2) = cx;
         K(1, 2) = cy;
-
+        Twvr_ = Eigen::Matrix4f::Identity();
         Eigen::Matrix3f Rvc = common::EulertoMatrix3d<float>(Eigen::Vector3f(pitch, roll, yaw));
-
         FeatureExtraction* net = new FeatureExtraction(module_path, height, width);
-        int win_size = 160;
-        tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f((width - win_size)/2, (height - win_size)/2, win_size, win_size), scale_inv, net);
+        int win_size = 200;
+        //tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f((width - win_size)/2, (height - win_size)/2, win_size, win_size), scale_inv, net);
+        tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f(220, 100, win_size, win_size), scale_inv, net);
         //debug
-#if 0
+#if 1
 /*
         {
             cv::Mat img_gray0;
@@ -68,10 +78,11 @@ namespace feature_tracker
             //cv::waitKey();
 
         }
-        for (int i = 0; i < 1487; i++)
+    */
+        for (int i = 200; i < 300; i++)
         {
             char fn[200];
-            sprintf(fn,"/home/liu/bag/wlo60/frame%04d.png",i);
+            sprintf(fn,"/home/liu/bag/vodom/30/frame%04d.png",i);
             //printf(fn);
             cv::Mat img = cv::imread(fn);
             cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
@@ -79,7 +90,6 @@ namespace feature_tracker
             tracker_->track(img);
             tracker_->show(img);
         }
-    */
 #endif
 
         img_sub_ = nh.subscribe("web_camera/image_rect", 1000, &FeatureTrackerROS::imageCallback, this);
@@ -104,8 +114,58 @@ namespace feature_tracker
         cv::Mat img;
         cv_ptr->image.copyTo(img);
 
-        tracker_->track(img);
-        tracker_->show(img);
+        bool state = tracker_->track(img);
 
+        if (state)
+        {
+            tracker_->show(img);
+            odomPublish(msg->header.stamp);
+        }
+        else
+        {
+            last_time_ = msg->header.stamp;
+        }
     }
+    void FeatureTrackerROS::odomPublish(const ros::Time& t)
+    {
+        auto Twvl = tracker_->getTwvl();
+        //auto Tvlvr = Twvl.inverse() * Twvr_;
+        //auto Tvrvl = Twvr_.inverse() * Twvl;
+        //double dt = (t - last_time_).toSec();
+        //double dth = std::atan2(Tvrvl(1, 0), Tvrvl(0, 0));
+        //double dx = Tvrvl(0, 3);
+        //double dy = Tvrvl(1, 3);
+
+
+        //double linearx_velocity = dx/dt;
+        //double lineary_velocity = dy/dt;
+        //double angular_velocity = dth/dt;
+
+        Twvr_ = Twvl;
+
+        double th = std::atan2(Twvl(1, 0), Twvl(0, 0));
+        geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(-th);
+
+        nav_msgs::Odometry odom;
+        odom.header.stamp = t;
+        odom.header.frame_id = "odom";
+
+        //set the position
+        odom.pose.pose.position.x = Twvl(1,3);
+        odom.pose.pose.position.y = Twvl(0,3);
+        odom.pose.pose.position.z = 0.0;
+        odom.pose.pose.orientation = odom_quat;
+
+        ////set the velocity
+        //odom.child_frame_id = "base_link";
+        //odom.twist.twist.linear.x = linearx_velocity;
+        //odom.twist.twist.linear.y = lineary_velocity;
+        //odom.twist.twist.angular.z = angular_velocity;
+
+        //publish the message
+        odom_pub_.publish(odom);
+
+        
+    }
+
 } // namespace feature_tracker
