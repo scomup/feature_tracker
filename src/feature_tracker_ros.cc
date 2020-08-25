@@ -30,7 +30,7 @@ namespace feature_tracker
 
         std::string module_path;
         int width, height;
-        private_nh.param<std::string>("module_path", module_path, "/home/liu/catkin_ws/src/feature_tracker/weight/model_trt_fp16.engine");
+        private_nh.param<std::string>("module_path", module_path, "/home/liu/catkin_ws/src/feature_tracker/weight/feature_net.engine");
         private_nh.param<int>("width", width, 640);
         private_nh.param<int>("height", height, 360);
 
@@ -44,9 +44,9 @@ namespace feature_tracker
 
         Eigen::Matrix3f Rvc = common::EulertoMatrix3d<float>(Eigen::Vector3f(pitch, roll, yaw));
 
-        SuperpointFrontend* superpoint = new SuperpointFrontend(module_path, height, width);
+        FeatureExtraction* net = new FeatureExtraction(module_path, height, width);
         int win_size = 160;
-        tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f((width - win_size)/2, (height - win_size)/2, win_size, win_size), scale_inv, superpoint);
+        tracker_ = new FeatureTracker(Rvc, K, Eigen::Vector4f((width - win_size)/2, (height - win_size)/2, win_size, win_size), scale_inv, net);
         //debug
 #if 0
 /*
@@ -68,7 +68,6 @@ namespace feature_tracker
             //cv::waitKey();
 
         }
-    */
         for (int i = 0; i < 1487; i++)
         {
             char fn[200];
@@ -80,6 +79,7 @@ namespace feature_tracker
             tracker_->track(img);
             tracker_->show(img);
         }
+    */
 #endif
 
         img_sub_ = nh.subscribe("web_camera/image_rect", 1000, &FeatureTrackerROS::imageCallback, this);

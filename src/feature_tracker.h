@@ -7,7 +7,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "sensor_msgs/Image.h"
-#include "superpoint_frontend.h"
+#include "feature_extraction.h"
 
 
 namespace feature_tracker {
@@ -20,7 +20,7 @@ class FeatureTracker
                    const Eigen::Matrix3f &K,
                    const Eigen::Vector4f &rect,
                    const int scale,
-                   SuperpointFrontend *kp_frontend);
+                   FeatureExtraction *kp_frontend);
     void track(const cv::Mat& img);
     void show(const cv::Mat &img) const;
 
@@ -40,7 +40,7 @@ class FeatureTracker
     std::vector<Eigen::Matrix<float, 2, 3>,Eigen::aligned_allocator<Eigen::Matrix<float, 2, 3>> > JwJg_;
     const Eigen::Vector4f rect_;
     const float scale_;
-    SuperpointFrontend* kp_frontend_;
+    FeatureExtraction* kp_frontend_;
     Eigen::Matrix4f Tvlvr_;
     cv::Mat ref_data_;
     cv::Mat liv_data_;

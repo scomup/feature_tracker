@@ -18,7 +18,7 @@ namespace feature_tracker
                                    const Eigen::Matrix3f &K,
                                    const Eigen::Vector4f &rect,
                                    const int scale,
-                                   SuperpointFrontend *kp_frontend)
+                                   FeatureExtraction *kp_frontend)
         : rect_(rect(0)/scale,rect(1)/scale,rect(2)/scale,rect(3)/scale),
           scale_(scale),
           kp_frontend_(kp_frontend)
